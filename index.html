@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bloxd Seed Map</title>
+<style>
+:root{--bg:#0d0f13;--pn:#171a20;--card:#1d2128;--bd:#2c323d;--tx:#e8ebf0;--mu:#8b94a4;--ac:#5b6cf5;--gr:#2fbf71}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{display:flex;background:var(--bg);color:var(--tx);font:13px/1.4 system-ui,Segoe UI,sans-serif;overflow:hidden}
+#mapwrap{position:relative;flex:1;min-width:0;background:#0b0d10}canvas#cv{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+canvas#cv.drag{cursor:grabbing}canvas#cv.meas{cursor:crosshair}
+#side{width:340px;background:var(--pn);border-left:1px solid var(--bd);overflow-y:auto;padding:12px}
+h1{font-size:18px;margin:0;display:flex;justify-content:space-between;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:12px}
+h1 span{color:var(--ac)}h1 small{color:var(--mu);font-weight:400;font-size:11px}
+.pn{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-top:10px}
+.pn>h2,summary{margin:0 0 8px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#c7cdd8;font-weight:700}summary{cursor:pointer;margin:0}
+details[open]>summary{margin-bottom:8px}
+input,select,textarea{width:100%;background:#101318;color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:7px 8px;font:inherit}
+select[multiple]{height:96px}label{display:block;font-size:11px;color:var(--mu);margin:6px 0 2px}
+button{background:#272d37;color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:7px 10px;font-weight:600;cursor:pointer;font-size:12px}
+button:hover{background:#313846}button.pri{background:var(--ac);border-color:var(--ac)}button.go{background:var(--gr);border-color:var(--gr);color:#06180e}
+button.on{background:#3b4560;border-color:var(--ac)}button:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:6px;align-items:center}.row>*{flex:1}.row>button{flex:1}.row>.fix{flex:none}
+.mu{color:var(--mu)}.err{color:#ff8a80}.tags span{display:inline-block;background:#101318;border:1px solid var(--bd);border-radius:9px;padding:0 6px;margin:2px 2px 0 0;font-size:11px}
+.leg{display:flex;align-items:center;gap:8px;margin:4px 0}.leg i{width:12px;height:12px;border:2px solid;border-radius:2px}.leg .n{margin-left:auto;color:var(--mu)}
+.wp{display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--bd)}.wp:first-child{border-top:0}.wp span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hud{position:absolute;pointer-events:none;background:rgba(10,12,16,.82);border:1px solid #2a303a;border-radius:6px;padding:5px 9px}
+#status{top:10px;left:50%;transform:translateX(-50%)}#coords{left:10px;bottom:10px;font-variant-numeric:tabular-nums}
+#tip{display:none;max-width:260px}#msg{inset:0;margin:auto;width:min(420px,80%);height:fit-content;text-align:center;padding:20px;font-size:14px}
+.res{padding:6px 0;border-top:1px solid var(--bd);display:flex;gap:6px;justify-content:space-between}.res:first-child{border-top:0}
+.bar{height:5px;background:#101318;border-radius:3px;margin-top:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:var(--gr)}
+@media(max-width:800px){body{flex-direction:column}#side{width:100%;height:45%;border-left:0;border-top:1px solid var(--bd)}}
+.tier{display:inline-block;border:2px solid;border-radius:3px;padding:0 5px;font-weight:700;font-size:11px;background:#101318}
+.chest{border-top:1px solid var(--bd);padding:7px 0}.chest:first-of-type{border-top:0}.items{margin:4px 0 0;padding-left:16px;font-size:12px;columns:1}.items li{margin:1px 0}.items .at{color:var(--mu)}
+.fr{display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--bd);font-size:12px}.fr:first-child{border-top:0}.fr span{flex:1}
+</style></head><body>
+<div id="mapwrap">
+  <canvas id="cv"></canvas>
+  <div class="hud" id="status">Load your game file to begin</div>
+  <div class="hud" id="coords">—</div>
+  <div class="hud" id="tip"></div>
+  <div class="hud" id="msg">Loading world generator…</div>
+</div>
+
+<div id="side">
+  <h1><div>Bloxd Seed <span>Map</span></div><small>real worldgen</small></h1>
+
+  <div style="display:none"><input type="file" id="file"><div id="st"></div></div>
+
+  <div class="pn"><h2>World / Location</h2>
+    <div class="row"><input id="seed" value="1" placeholder="seed"><button class="pri fix" id="load" disabled>LOAD</button></div>
+    <div class="row" style="margin-top:6px"><input id="px" type="number" placeholder="X"><input id="pz" type="number" placeholder="Z"></div>
+    <div class="row" style="margin-top:6px"><button id="tpw" disabled>TP WORLD</button><button id="tpc" disabled>TP CHUNK</button></div>
+    <div class="row" style="margin-top:6px"><button id="copylink" disabled>COPY LINK</button><button id="savepng" disabled>SAVE PNG</button></div></div>
+
+  <div class="pn"><h2>Map tools &amp; overlay</h2>
+    <div class="row mu"><span>Rotation</span><span class="fix" id="rotv">0°</span></div>
+    <input type="range" id="rot" min="0" max="359" value="0" style="padding:0">
+    <div class="row" style="margin-top:8px"><button id="bmeas">MEASURE</button><button id="bstone">STONES</button><button id="bgrid">CHUNKS</button></div>
+    <div class="mu" style="margin-top:6px">Drag = pan · wheel = zoom · right-click = waypoint</div></div>
+
+  <div class="pn"><h2>Structures</h2><div id="legend"></div>
+    <div class="mu" style="margin-top:4px">Counts are structures discovered so far. Hover a marker for details.</div></div>
+
+  <div class="pn"><h2>Chest loot</h2><div id="loot" class="mu">Click a structure marker on the map to see its chests and loot.</div></div>
+
+  <div class="pn"><h2>Find item in chests</h2><input id="findq" placeholder="e.g. Diamond, Iron Sword, Potion…"><div id="findres" class="mu" style="margin-top:6px">Type an item name. Searches structures discovered so far.</div></div>
+
+  <div class="pn"><h2>Waypoints</h2><div id="wps" class="mu">No waypoints yet. Right-click the map to add.</div></div>
+
+  <details class="pn"><summary>Seed search</summary>
+    <label>Spawn biome must be (Ctrl/Cmd-click for several)</label><select id="atSpawn" multiple></select>
+    <label>Must be nearby (all selected)</label><select id="need" multiple></select>
+    <label>Must NOT be nearby</label><select id="avoid" multiple></select>
+    <div class="row"><div><label>Radius</label><input id="radius" type="number" value="128"></div><div><label>Step</label><input id="step" type="number" value="16"></div><div><label>Min biomes</label><input id="variety" type="number" value="0"></div></div>
+    <div class="row" style="margin-top:6px"><label class="fix" style="margin:0"><input type="checkbox" id="land" style="width:auto"> spawn on land (slow)</label></div>
+    <div class="row"><div><label>No water within</label><input id="dry" type="number" value="0"></div><div><label>Height min</label><input id="hmin" type="number"></div><div><label>max</label><input id="hmax" type="number"></div></div>
+    <label>Seeds</label><select id="mode"><option value="range">Number range</option><option value="words">Word list</option><option value="random">Random 6-digit</option></select>
+    <div id="m_range" class="row" style="margin-top:6px"><input id="from" type="number" value="1"><input id="to" type="number" value="20000"></div>
+    <textarea id="words" rows="3" style="display:none;margin-top:6px" placeholder="one seed per line"></textarea><input id="rand" type="number" value="20000" style="display:none;margin-top:6px">
+    <div class="row" style="margin-top:6px"><div><label>Stop after N</label><input id="limit" type="number" value="10"></div><div><label>Threads</label><input id="threads" type="number" min="1" max="16"></div></div>
+    <div class="row" style="margin-top:8px"><button class="go" id="go" disabled>SEARCH</button><button id="stop" disabled>STOP</button></div>
+    <div id="prog" class="mu" style="margin-top:6px"></div><div class="bar"><i id="barfill"></i></div><div id="results" style="margin-top:6px"></div></details>
+</div>
+
+<script type="text/plain" id="glue">
+;(function(){
+const gameHandler=self.onmessage,CH=32,bName=new Map();
+function makeMeta(track){let n=1;const c=new Map();return new Proxy({},{get(_,p){if(typeof p==='symbol'||p==='then'||p==='toJSON')return undefined;
+ if(!c.has(p)){const o={id:n++,name:p,meta:{rot:null,rootName:p,metaStr:''},rootMetaDesc:''};c.set(p,o);if(track)bName.set(o.id,p)}return c.get(p)},has:()=>true,
+ ownKeys:()=>[...c.keys()],getOwnPropertyDescriptor:(_,p)=>c.has(p)?{enumerable:true,configurable:true,value:c.get(p)}:undefined})}
+gameHandler({data:{type:'workerInit',eI:CH,blockMetadata:makeMeta(true),itemMetadata:makeMeta(false),memoryCoefficient:1}});
+class W{constructor(seed){this.seed=String(seed);gameHandler({data:{type:'createSeed',seed:this.seed,nI:[],pI:null}});
+ this.gen=self.__GH[this.seed].defaultGenerator;this.bs=this.gen.biomeSelector;this.views=new Map()}
+ id(x,z){return this.bs.getBiome(Math.floor(x),Math.floor(z)).biomeId}
+ terr(x,z){x=Math.floor(x);z=Math.floor(z);const cx=Math.floor(x/CH)*CH,cz=Math.floor(z/CH)*CH,k=cx+'|'+cz;let v=this.views.get(k);
+  if(!v){if(this.views.size>64)this.views.clear();v=this.gen.getHeightMapVals(cx,cz,this.gen.getClosestBiomesForChunk(cx,cz),null).viewJustInnerChunk();this.views.set(k,v)}
+  const w=v.get(x,z,1);return{g:v.get(x,z,0),w:w>-9000?w:null}}
+ dispose(){gameHandler({data:{type:'deleteSeed',seed:this.seed}})}}
+function check(w,c,L){const[sx,sz]=c.spawn;if(c.atSpawn&&!c.atSpawn.includes(w.id(sx,sz)))return null;
+ const seen=new Map(),r=c.radius,st=c.step;
+ for(let dx=-r;dx<=r;dx+=st)for(let dz=-r;dz<=r;dz+=st){const id=w.id(sx+dx,sz+dz),d=Math.max(Math.abs(dx),Math.abs(dz));if(!seen.has(id)||seen.get(id)>d)seen.set(id,d)}
+ if(c.avoid&&c.avoid.some(i=>seen.has(i)))return null;for(const g of c.need){if(!g.some(i=>seen.has(i)))return null}
+ const names=[...new Set([...seen.keys()].map(i=>L[i]||'#'+i))].sort();if(names.length<c.minVariety)return null;
+ const res={seed:w.seed,spawn:L[w.id(sx,sz)]||'?',variety:names.length,biomes:names};
+ if(c.land||c.dry>0||c.hmin!=null||c.hmax!=null){const t=w.terr(sx,sz);res.y=t.g;
+  if(c.land&&t.w!==null&&t.w>t.g)return null;if(c.hmin!=null&&t.g<c.hmin)return null;if(c.hmax!=null&&t.g>c.hmax)return null;
+  if(c.dry>0){const R=c.dry;for(let dx=-R;dx<=R;dx+=8)for(let dz=-R;dz<=R;dz+=8){const q=w.terr(sx+dx,sz+dz);if(q.w!==null&&q.w>q.g)return null}}}
+ return res}
+let sentBB=false;const bbOf=w=>w.bs.JI.map(e=>({t:bName.get(e.biome.topsoilBlockType)||'',w:bName.get(e.biome.topwaterBlockType)||''}));
+let cur=null;const world=seed=>{seed=String(seed);if(!cur||cur.seed!==seed){if(cur)cur.dispose();cur=new W(seed)}return cur};
+self.onmessage=e=>{const m=e.data;
+ if(m.t==='search'){if(cur){cur.dispose();cur=null}const hits=[];for(const s of m.seeds){const w=new W(s);try{const r=check(w,m.c,m.L);if(r)hits.push(r)}finally{w.dispose()}}
+  self.postMessage({t:'hits',n:m.seeds.length,hits})}
+ else if(m.t==='lite'){const w=world(m.seed),b=new Uint8Array(64);for(let j=0;j<8;j++)for(let i=0;i<8;i++)b[j*8+i]=w.id(m.cx+i*4+2,m.cz+j*4+2);
+  self.postMessage({t:'lite',tok:m.tok,cx:m.cx,cz:m.cz,biome:b,bb:sentBB?undefined:(sentBB=true,bbOf(w))},[b.buffer])}
+ else if(m.t==='tile'){const w=world(m.seed),cx=m.cx,cz=m.cz,info=w.gen.getInfoForChunkColumn(cx,cz),hv=info.heightmapVals,bi=info.biomeInfos.biomeIds,si=info.biomeInfos.stoneTypeIds;
+  const ground=new Int16Array(1024),water=new Int16Array(1024),biome=new Uint8Array(1024),stone=new Uint16Array(1024),names={};
+  for(let z=0;z<32;z++)for(let x=0;x<32;x++){const gx=cx+x,gz=cz+z,i=z*32+x;ground[i]=hv.get(gx,gz,0);const wv=hv.get(gx,gz,1);water[i]=wv>-9000?wv:-32768;
+   biome[i]=bi.get(gx,gz);const s=si.get(gx,gz);stone[i]=s;if(!(s in names))names[s]=bName.get(s)||('#'+s)}
+  const trees=info.treesForChunk.filter(t=>t.treeX>=cx&&t.treeX<cx+32&&t.treeZ>=cz&&t.treeZ<cz+32).map(t=>[t.treeX,t.treeZ,t.treeType,t.height]);
+  const attrStr=it=>{const ca=(it.attributes&&it.attributes.customAttributes)||{};return Object.entries(ca).map(([k,v])=>k==='mobSettings'&&v&&v.name?v.name:k+(typeof v==='object'?' '+JSON.stringify(v):' '+v)).join(', ')};
+  const prefabs=info.chunkPrefabs.map(p=>{const ch=p.chestLocationToQuality.entries().map(c=>{let items=[];try{const arr=JSON.parse(new self.__LootChest(0,w.seed,c.x,c.y,c.z,c.val).generate().data.persisted.chestStr);
+     items=arr.filter(Boolean).map(it=>[it.name,it.amount,attrStr(it)])}catch(e){}return [c.x,c.y,c.z,c.val,items]});
+    return [p.prefab.schematic.name,p.centreX,p.centreZ,p.anchorY,p.prefab.dimensionX,p.prefab.dimensionY,p.prefab.dimensionZ,ch]});
+  self.postMessage({t:'tile',tok:m.tok,cx,cz,ground,water,biome,stone,names,trees,prefabs,bb:sentBB?undefined:(sentBB=true,bbOf(w))},[ground.buffer,water.buffer,biome.buffer,stone.buffer])}
+};
+self.postMessage({t:'ready'});
+})();
+</script>
+
+<script src="game_worker.js"></script>
+<script src="textures.js"></script>
+<script>
+const LABELS=['Jungle','Desert','Snowy Spectral Plains','Cactus Desert','Red Desert','Jungle','Plains','Snowy Spectral Plains','Farmland Plains','Meadow','Snowy Plains','Forest','Cherry Forest','Pear Forest','Autumn Forest','Plum Forest','Snowy Spectral Forest','Cherry Forest','Jungle','Pine Forest','Snowy Spectral Forest','Snowy Pine Forest','Rolling Hills','Snowy Mountains','Blue Forest'];
+const NAMES=[...new Set(LABELS)];
+const COL={Jungle:[52,130,50],Desert:[205,190,130],'Spectral Plains':[130,96,170],'Cactus Desert':[190,178,100],'Red Desert':[190,100,60],Plains:[110,160,70],'Farmland Plains':[170,175,70],Meadow:[130,180,90],'Cranberry Heath':[130,80,90],Forest:[75,115,50],'Cherry Forest':[150,150,90],'Pear Forest':[110,150,60],'Autumn Forest':[150,120,50],'Plum Forest':[100,90,80],'Spectral Forest':[80,70,120],'Pine Forest':[60,100,70],'Dense Pine Forest':[50,85,65],'Rolling Hills':[100,150,90],'Snowy Mountains':[225,232,238],'Blue Forest':[70,100,150]};
+Object.assign(COL,{'Snowy Spectral Plains':[215,220,235],'Snowy Plains':[235,240,245],'Snowy Spectral Forest':[200,205,225],'Snowy Pine Forest':[220,230,235]});
+const TREE=[[40,100,34],[22,78,50],[110,50,130],0,[28,86,56],[110,150,50],[18,92,28],[70,150,56],[190,96,22],[110,150,44],[236,150,186],[140,80,200],[84,140,36],[210,160,40]];
+const STONE={Stone:[130,132,138],Andesite:[160,160,160],Diorite:[205,205,210],Granite:[172,108,92]};
+const CATS=[{k:'dsmall',n:'Draugr dungeon · small',c:'#e8bb3a'},{k:'dmed',n:'Draugr dungeon · medium',c:'#3fd9d0'},{k:'dlarge',n:'Draugr dungeon · large',c:'#4cd07a'},{k:'magma',n:'Magma dungeon',c:'#d86ad0'},
+  {k:'ruin',n:'Surface ruins',c:'#ff9f43'},{k:'tree',n:'Giant trees',c:'#a3e635'},{k:'rock',n:'Rocks',c:'#b0b7c3'},{k:'other',n:'Other',c:'#ffffff'}];
+const cat=n=>/^dungeonDraugrSmall/.test(n)?'dsmall':/^dungeonDraugrMedium/.test(n)?'dmed':/^dungeonDraugr/.test(n)?'dlarge':/^dungeonMagma/.test(n)?'magma':/^ruin/.test(n)?'ruin':/^tree/.test(n)?'tree':/^rock/.test(n)?'rock':'other';
+const pretty=n=>n.replace(/([a-z])([A-Z0-9])/g,'$1 $2').replace(/^./,c=>c.toUpperCase());
+const $=id=>document.getElementById(id);
+const hash=s=>{let h=0;for(const ch of s)h=(h*31+ch.charCodeAt(0))>>>0;return h};
+const stoneCol=n=>STONE[n]||[80+hash(n)%120,80+(hash(n)>>3)%120,80+(hash(n)>>6)%120];
+
+// ---------------- state ----------------
+let findSoon=false;
+const TIERC=['#ffffff','#3ddc6a','#3b82f6','#a855f7','#facc15'];
+const S={sel:null,find:{q:'',keys:new Set()},tiers:[true,true,true,true,true],seed:'1',cx:0,cz:0,scale:2,rot:0,tiles:new Map(),lite:new Map(),pend:new Set(),tok:0,prefabs:new Map(),
+  stones:false,grid:false,meas:false,mpts:[],wps:[],cats:Object.fromEntries(CATS.map(c=>[c.k,true])),hover:null,drag:null};
+let workerSrc=null,mapPool=[],searchPool=[],dirty=true;
+const cv=$('cv'),ctx=cv.getContext('2d');let W=1,H=1,DPR=1;
+function resize(){DPR=devicePixelRatio||1;const r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);dirty=true;pump()}
+new ResizeObserver(resize).observe($('mapwrap'));
+
+// ---------------- coordinate transforms ----------------
+const rad=()=>S.rot*Math.PI/180;
+function w2s(x,z){const c=Math.cos(rad()),s=Math.sin(rad()),dx=(x-S.cx)*S.scale,dz=(z-S.cz)*S.scale;return[W/2+dx*c-dz*s,H/2+dx*s+dz*c]}
+function s2w(px,py){const c=Math.cos(rad()),s=Math.sin(rad()),dx=px-W/2,dz=py-H/2;return[S.cx+(dx*c+dz*s)/S.scale,S.cz+(-dx*s+dz*c)/S.scale]}
+function bounds(){const p=[s2w(0,0),s2w(W,0),s2w(0,H),s2w(W,H)];return{x0:Math.min(...p.map(a=>a[0])),x1:Math.max(...p.map(a=>a[0])),z0:Math.min(...p.map(a=>a[1])),z1:Math.max(...p.map(a=>a[1]))}}
+
+// ---------------- tiles ----------------
+const key=(cx,cz)=>cx+','+cz;
+const TOPTEX={'Grass Block':'grass_top','Jungle Grass Block':'jungle_grass_block','Pine Grass Block':'pine_grass_block','Sand':'sand','Red Sand':'red_sand','Snow':'snow','Packed Snow':'packed_snow'};
+const WATERTEX={Water:'water',Ice:'ice'},STONETEX={Stone:'stone',Andesite:'stone_andesite',Diorite:'stone_diorite',Granite:'stone_granite'};
+const LEAF=['leaves_maple','leaves_pine','leaves_plum',null,'leaves_cedar','leaves_aspen','leaves_jungle','leaves_palm','leaves_maple_autumn','leaves_pear','leaves_cherry','leaves_spectral','leaves_mango','leaves_aspen_autumn'];
+const TEXD={};
+const texReady=Promise.all(Object.entries(window.TEX||{}).map(([n,u])=>new Promise(res=>{const im=new Image();
+  im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=8;const g=c.getContext('2d');g.drawImage(im,0,0,8,8);const d=g.getImageData(0,0,8,8).data;let r=0,gg=0,b=0,k=0;
+    for(let i=0;i<256;i+=4)if(d[i+3]>20){r+=d[i];gg+=d[i+1];b+=d[i+2];k++}k=k||1;TEXD[n]={d,img:c,avg:[r/k,gg/k,b/k]};res()};
+  im.onerror=res;im.src=u})));
+const surfOf=bid=>{const e=S.bb&&S.bb[bid];return e?{top:TEXD[TOPTEX[e.t]],water:TEXD[WATERTEX[e.w]]}:{}};
+const texel=(T,tx,tz)=>{const k=((tz&7)*8+(tx&7))*4;return[T.d[k],T.d[k+1],T.d[k+2],T.d[k+3]]};
+function colorAt(t,i,tx,tz,sf){const h=t.ground[i],wv=t.water[i];
+  if(wv!==-32768&&wv>h){let c=[40,84,168];if(sf.water){const p=texel(sf.water,tx,tz),a=p[3]/255;c=[p[0]*a+20*(1-a),p[1]*a+50*(1-a),p[2]*a+110*(1-a)]}
+    const m=1-Math.min(40,wv-h)/90;return[c[0]*.55*m,c[1]*.75*m,Math.min(255,c[2]*1.05)*m,1]}
+  if(sf.top){const p=texel(sf.top,tx,tz);return[p[0],p[1],p[2],0]}
+  const c=COL[LABELS[t.biome[i]]]||[128,128,128];return[c[0],c[1],c[2],0]}
+function shade(t,x,z,i,wet){if(wet)return 1;const h=t.ground[i];let m=.92+Math.max(-.14,Math.min(.22,h/330));const b=Math.floor(h/3);
+  if((x<31&&b!==Math.floor(t.ground[i+1]/3))||(z<31&&b!==Math.floor(t.ground[i+32]/3)))m*=.84;return m}
+function paintBase(t){const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d'),im=g.createImageData(32,32),d=im.data,sfc={};
+  for(let z=0;z<32;z++)for(let x=0;x<32;x++){const i=z*32+x,bid=t.biome[i],sf=sfc[bid]||(sfc[bid]=surfOf(bid)),q=colorAt(t,i,t.cx+x,t.cz+z,sf),m=shade(t,x,z,i,q[3]);
+    d[i*4]=Math.min(255,q[0]*m);d[i*4+1]=Math.min(255,q[1]*m);d[i*4+2]=Math.min(255,q[2]*m);d[i*4+3]=255}
+  g.putImageData(im,0,0);return c}
+function paintHi(t){const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d'),im=g.createImageData(256,256),d=im.data,sfc={};
+  for(let z=0;z<32;z++)for(let x=0;x<32;x++){const i=z*32+x,bid=t.biome[i],sf=sfc[bid]||(sfc[bid]=surfOf(bid));
+    for(let tz=0;tz<8;tz++)for(let tx=0;tx<8;tx++){const q=colorAt(t,i,tx,tz,sf),m=shade(t,x,z,i,q[3]),o=((z*8+tz)*256+(x*8+tx))*4;
+      d[o]=Math.min(255,q[0]*m);d[o+1]=Math.min(255,q[1]*m);d[o+2]=Math.min(255,q[2]*m);d[o+3]=255}}
+  g.putImageData(im,0,0);return c}
+function paintStone(t){const c=document.createElement('canvas');c.width=c.height=32;const g=c.getContext('2d'),im=g.createImageData(32,32),d=im.data;
+  for(let z=0;z<32;z++)for(let x=0;x<32;x++){const i=z*32+x,nm=t.names[t.stone[i]]||'?',T=TEXD[STONETEX[nm]];let col;
+    if(T){const p=texel(T,t.cx+x,t.cz+z);col=[p[0],p[1],p[2]]}else col=stoneCol(nm);d[i*4]=col[0];d[i*4+1]=col[1];d[i*4+2]=col[2];d[i*4+3]=255}
+  g.putImageData(im,0,0);return c}
+function paintLite(b){const c=document.createElement('canvas');c.width=c.height=8;const g=c.getContext('2d'),im=g.createImageData(8,8),d=im.data;
+  for(let i=0;i<64;i++){const e=S.bb&&S.bb[b[i]],T=e&&TEXD[TOPTEX[e.t]],col=T?T.avg:(COL[LABELS[b[i]]]||[128,128,128]);d[i*4]=col[0]*.92;d[i*4+1]=col[1]*.92;d[i*4+2]=col[2]*.92;d[i*4+3]=255}
+  g.putImageData(im,0,0);return c}
+
+// ---------------- scheduling ----------------
+function visibleChunks(){const b=bounds(),out=[];
+  for(let cx=Math.floor(b.x0/32)*32;cx<=b.x1;cx+=32)for(let cz=Math.floor(b.z0/32)*32;cz<=b.z1;cz+=32)out.push([cx,cz]);return out}
+function pump(){
+  if(!mapPool.length||!workerSrc)return;
+  const idle=mapPool.filter(w=>!w.busy);if(!idle.length){updStatus();return}
+  const vis=visibleChunks();if(vis.length>14000){updStatus();return}
+  const dist=([x,z])=>(x+16-S.cx)**2+(z+16-S.cz)**2;vis.sort((a,b)=>dist(a)-dist(b));
+  const full=S.scale>=0.9;const q=[];
+  for(const [x,z] of vis){const k=key(x,z);if(!S.lite.has(k)&&!S.tiles.has(k)&&!S.pend.has('l'+k))q.push(['lite',x,z,'l'+k])}
+  if(full)for(const [x,z] of vis){const k=key(x,z);if(!S.tiles.has(k)&&!S.pend.has('t'+k))q.push(['tile',x,z,'t'+k])}
+  for(const w of idle){const it=q.shift();if(!it)break;w.busy=it[3];S.pend.add(it[3]);
+    w.postMessage({t:it[0],seed:S.seed,cx:it[1],cz:it[2],tok:S.tok})}
+  updStatus(q.length)}
+function onMapMsg(w,m){
+  if(m.t!=='tile'&&m.t!=='lite')return;
+  S.pend.delete(w.busy);w.busy=null;
+  if(m.bb)S.bb=m.bb;
+  if(m.tok===S.tok){const k=key(m.cx,m.cz);
+    if(m.t==='lite')S.lite.set(k,{img:paintLite(m.biome),biome:m.biome});
+    else{const t={...m,img:paintBase(m),stoneImg:null};S.tiles.set(k,t);
+      for(const p of m.prefabs){const id=p[0]+'|'+p[1]+'|'+p[2];if(!S.prefabs.has(id))S.prefabs.set(id,{name:p[0],x:p[1],z:p[2],y:p[3],dx:p[4],dy:p[5],dz:p[6],cat:cat(p[0]),chests:(p[7]||[]).map(c=>({x:c[0],y:c[1],z:c[2],q:c[3],items:c[4]}))});findSoon=true}
+      updLegend()}
+    dirty=true}
+  pump()}
+function updStatus(q){const n=mapPool.filter(w=>w.busy).length;
+  $('status').textContent=q||n?`Rendering… ${(q||0)+n} tiles queued · ${mapPool.length} threads`:`Seed ${S.seed} · ${S.tiles.size} tiles · ${S.scale>=0.9?'detail':'overview'} view · ${mapPool.length} threads`}
+
+// ---------------- drawing ----------------
+function draw(){
+  dirty=false;ctx.setTransform(1,0,0,1,0,0);ctx.fillStyle='#0b0d10';ctx.fillRect(0,0,cv.width,cv.height);
+  if(!workerSrc)return;
+  const sc=S.scale,c=Math.cos(rad()),s=Math.sin(rad());
+  ctx.imageSmoothingEnabled=false;
+  ctx.setTransform(DPR*sc*c,DPR*sc*s,-DPR*sc*s,DPR*sc*c,DPR*(W/2-sc*(S.cx*c-S.cz*s)),DPR*(H/2-sc*(S.cx*s+S.cz*c)));
+  const vis=visibleChunks(),trees=[];
+  for(const [x,z] of vis){const k=key(x,z),t=S.tiles.get(k);
+    if(t){ctx.drawImage(sc>=5?(t.hi||(t.hi=paintHi(t))):t.img,x,z,32.04,32.04);
+      if(S.stones){if(!t.stoneImg)t.stoneImg=paintStone(t);ctx.globalAlpha=.6;ctx.drawImage(t.stoneImg,x,z,32.04,32.04);ctx.globalAlpha=1}
+      if(sc>=1&&t.trees.length)trees.push(t.trees)}
+    else{const l=S.lite.get(k);if(l)ctx.drawImage(l.img,x,z,32.2,32.2)}}
+  for(const tl of trees)for(const t of tl){const nm=LEAF[t[2]],T=nm&&TEXD[nm],sz=t[3]>=12?6:t[3]>=7?5:4;
+    if(T)ctx.drawImage(T.img,t[0]+.5-sz/2,t[1]+.5-sz/2,sz,sz);else{ctx.fillStyle='rgba(40,100,40,.9)';ctx.fillRect(t[0]-1,t[1]-1,sz,sz)}}
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  if(S.grid&&sc>=1){ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;ctx.beginPath();
+    for(const [x,z] of vis){const a=w2s(x,z),b=w2s(x+32,z),d=w2s(x,z+32);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.moveTo(a[0],a[1]);ctx.lineTo(d[0],d[1])}ctx.stroke()}
+  // structures & chests
+  {const isz=Math.max(12,Math.min(20,7+3*sc));ctx.imageSmoothingEnabled=false;const CT=TEXD.chest_front;
+   for(const p of S.prefabs.values()){if(!S.cats[p.cat])continue;
+    for(const m of markersOf(p)){const [px,py]=w2s(m.x,m.z);if(px<-30||py<-30||px>W+30||py>H+30)continue;
+      if(m.tier<0){const col=CATS.find(k=>k.k===p.cat).c;ctx.fillStyle='rgba(0,0,0,.5)';ctx.fillRect(px-5,py-5,10,10);ctx.fillStyle=col;ctx.fillRect(px-4,py-4,8,8);continue}
+      const h=isz/2,hit=m.c?S.find.keys.has(m.c.x+'|'+m.c.y+'|'+m.c.z):p.chests.some(c=>S.find.keys.has(c.x+'|'+c.y+'|'+c.z));
+      if(hit){ctx.strokeStyle='#ff4fd8';ctx.lineWidth=3;ctx.setLineDash([4,3]);ctx.strokeRect(px-h-5,py-h-5,isz+10,isz+10);ctx.setLineDash([])}
+      ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(px-h-1,py-h-1,isz+2,isz+2);
+      if(CT)ctx.drawImage(CT.img,px-h+1,py-h+1,isz-2,isz-2);
+      ctx.strokeStyle=TIERC[m.tier];ctx.lineWidth=2;ctx.strokeRect(px-h,py-h,isz,isz);
+      if(m.n>1){ctx.font='bold 10px system-ui';ctx.fillStyle='#000';ctx.fillText(m.n,px+h-2,py-h+1);ctx.fillStyle='#fff';ctx.fillText(m.n,px+h-3,py-h)}
+      if(S.sel===p){ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(px-h-3,py-h-3,isz+6,isz+6)}}}}
+  // spawn
+  {const [px,py]=w2s(0,0);ctx.strokeStyle='#ff3b30';ctx.fillStyle='rgba(255,59,48,.25)';ctx.lineWidth=2;const r=Math.max(8,16*sc);ctx.fillRect(px-r,py-r,2*r,2*r);ctx.strokeRect(px-r,py-r,2*r,2*r);
+    ctx.beginPath();ctx.moveTo(px-5,py-5);ctx.lineTo(px+5,py+5);ctx.moveTo(px+5,py-5);ctx.lineTo(px-5,py+5);ctx.stroke()}
+  // waypoints
+  for(const w of S.wps){const [px,py]=w2s(w.x,w.z);ctx.fillStyle='#ffd43b';ctx.strokeStyle='#000';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(px-6,py-14);ctx.lineTo(px+6,py-14);ctx.closePath();ctx.stroke();ctx.fill();
+    ctx.font='12px system-ui';ctx.strokeText(w.name,px+9,py-8);ctx.fillStyle='#fff';ctx.fillText(w.name,px+9,py-8)}
+  // measure
+  if(S.mpts.length){ctx.strokeStyle='#fff';ctx.fillStyle='#fff';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.beginPath();
+    S.mpts.forEach((p,i)=>{const [px,py]=w2s(p[0],p[1]);i?ctx.lineTo(px,py):ctx.moveTo(px,py)});ctx.stroke();ctx.setLineDash([]);
+    S.mpts.forEach(p=>{const [px,py]=w2s(p[0],p[1]);ctx.beginPath();ctx.arc(px,py,4,0,6.3);ctx.fill()});
+    if(S.mpts.length===2){const a=S.mpts[0],b=S.mpts[1],d=Math.hypot(a[0]-b[0],a[1]-b[1]),[mx,my]=w2s((a[0]+b[0])/2,(a[1]+b[1])/2),t=`${d.toFixed(1)} blocks (Δx ${Math.round(b[0]-a[0])}, Δz ${Math.round(b[1]-a[1])})`;
+      ctx.font='bold 12px system-ui';const tw=ctx.measureText(t).width;ctx.fillStyle='rgba(0,0,0,.8)';ctx.fillRect(mx-tw/2-6,my-22,tw+12,20);ctx.fillStyle='#fff';ctx.fillText(t,mx-tw/2,my-8)}}
+}
+(function loop(){if(dirty)draw();requestAnimationFrame(loop)})();
+
+// ---------------- interaction ----------------
+const tileAt=(x,z)=>S.tiles.get(key(Math.floor(x/32)*32,Math.floor(z/32)*32));
+function markersOf(p){if(!p.chests.length)return[{x:p.x,z:p.z,tier:-1,p}];
+  const vis=p.chests.filter(c=>S.tiers[c.q]);if(!vis.length)return[];
+  if(S.scale>=4)return vis.map(c=>({x:c.x+.5,z:c.z+.5,tier:c.q,p,c}));
+  return[{x:p.x,z:p.z,tier:Math.max(...vis.map(c=>c.q)),p,n:vis.length}]}
+function hitMarker(px,py){let best=null,bd=1e9;for(const p of S.prefabs.values()){if(!S.cats[p.cat])continue;for(const m of markersOf(p)){const [sx,sy]=w2s(m.x,m.z),d=Math.hypot(sx-px,sy-py);if(d<12&&d<bd){bd=d;best=m}}}return best}
+const hitPrefab=(px,py)=>{const m=hitMarker(px,py);return m&&m.p};
+function hoverInfo(px,py){const [x,z]=s2w(px,py),fx=Math.floor(x),fz=Math.floor(z),t=tileAt(x,z);let txt=`X ${fx}  Z ${fz}  ·  chunk ${Math.floor(fx/32)}, ${Math.floor(fz/32)}`;
+  if(t){const i=((fz-t.cz)&31)*32+((fx-t.cx)&31),h=t.ground[i],wv=t.water[i];txt+=`  ·  ${LABELS[t.biome[i]]||'?'}  ·  y=${h}${wv!==-32768&&wv>h?' (water to '+wv+')':''}${S.stones?'  ·  '+(t.names[t.stone[i]]||''):''}`}
+  else{const l=S.lite.get(key(Math.floor(x/32)*32,Math.floor(z/32)*32));if(l)txt+=`  ·  ${LABELS[l.biome[(((fz&31)>>2)*8)+((fx&31)>>2)]]||'?'}`}
+  $('coords').textContent=txt;
+  const m=hitMarker(px,py),p=m&&m.p,tip=$('tip');
+  if(p){tip.style.display='block';tip.style.left=(px+14)+'px';tip.style.top=(py+14)+'px';
+    const tc=[0,0,0,0,0];p.chests.forEach(c=>tc[c.q]++);const chs=p.chests.length?p.chests.map(c=>c).length+' chest'+(p.chests.length>1?'s':'')+': '+tc.map((n,i)=>n?`<span style="color:${TIERC[i]}">T${i+1}×${n}</span>`:'').filter(Boolean).join(' '):'no chests';
+    tip.innerHTML=`<b>${pretty(p.name)}</b><br><span class="mu">${CATS.find(k=>k.k===p.cat).n}</span><br>centre ${p.x}, ${p.z}<br>${chs}<br><span class="mu">click for loot</span>`}else tip.style.display='none'}
+cv.addEventListener('pointerdown',e=>{if(e.button!==0)return;const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  if(S.meas){const w=s2w(px,py);if(S.mpts.length>=2)S.mpts=[];S.mpts.push(w);dirty=true;return}
+  S.drag={px,py,cx:S.cx,cz:S.cz,moved:0};cv.classList.add('drag');cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top;
+  if(S.drag){const c=Math.cos(rad()),s=Math.sin(rad()),dx=px-S.drag.px,dy=py-S.drag.py;S.drag.moved=Math.max(S.drag.moved,Math.hypot(dx,dy));S.cx=S.drag.cx-(dx*c+dy*s)/S.scale;S.cz=S.drag.cz-(-dx*s+dy*c)/S.scale;dirty=true;pump();syncInputs(false);hashSoon()}
+  if(workerSrc)hoverInfo(px,py)});
+cv.addEventListener('pointerup',e=>{const d=S.drag;S.drag=null;cv.classList.remove('drag');
+  if(d&&d.moved<4){const r=cv.getBoundingClientRect(),m=hitMarker(e.clientX-r.left,e.clientY-r.top);S.sel=m?m.p:null;renderLoot();dirty=true}});
+cv.addEventListener('pointerleave',()=>{$('tip').style.display='none'});
+cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,[wx,wz]=s2w(px,py);
+  S.scale=Math.max(.35,Math.min(12,S.scale*(e.deltaY<0?1.15:1/1.15)));const [nx,nz]=s2w(px,py);S.cx+=wx-nx;S.cz+=wz-nz;dirty=true;pump();hashSoon()},{passive:false});
+cv.addEventListener('contextmenu',e=>{e.preventDefault();if(!workerSrc)return;const r=cv.getBoundingClientRect(),px=e.clientX-r.left,py=e.clientY-r.top,p=hitPrefab(px,py),[x,z]=s2w(px,py);
+  addWp(p?{x:p.x,z:p.z,name:pretty(p.name)}:{x:Math.round(x),z:Math.round(z),name:`Waypoint ${S.wps.length+1}`})});
+addEventListener('keydown',e=>{if(e.key==='Escape'){S.mpts=[];dirty=true}});
+
+function syncInputs(){$('px').value=Math.round(S.cx);$('pz').value=Math.round(S.cz)}
+$('tpw').onclick=()=>{S.cx=+$('px').value||0;S.cz=+$('pz').value||0;dirty=true;pump();hashSoon()};
+$('tpc').onclick=()=>{S.cx=(+$('px').value||0)*32+16;S.cz=(+$('pz').value||0)*32+16;syncInputs();dirty=true;pump();hashSoon()};
+$('rot').oninput=()=>{S.rot=+$('rot').value;$('rotv').textContent=S.rot+'°';dirty=true;pump()};
+const tog=(id,k)=>$(id).onclick=()=>{S[k]=!S[k];$(id).classList.toggle('on',S[k]);cv.classList.toggle('meas',S.meas);if(k==='meas')S.mpts=[];dirty=true};
+tog('bmeas','meas');tog('bstone','stones');tog('bgrid','grid');
+$('savepng').onclick=()=>{draw();const a=document.createElement('a');a.download=`seed_${S.seed}.png`;a.href=cv.toDataURL('image/png');a.click()};
+$('copylink').onclick=()=>{navigator.clipboard.writeText(location.href.split('#')[0]+'#'+hashStr());$('copylink').textContent='COPIED'; setTimeout(()=>$('copylink').textContent='COPY LINK',1200)};
+const hashStr=()=>`seed=${encodeURIComponent(S.seed)}&x=${Math.round(S.cx)}&z=${Math.round(S.cz)}&s=${S.scale.toFixed(2)}`;
+let ht=0;function hashSoon(){clearTimeout(ht);ht=setTimeout(()=>history.replaceState(null,'','#'+hashStr()),300)}
+
+// ---------------- legend / waypoints ----------------
+function updLegend(){const cnt={};for(const p of S.prefabs.values())cnt[p.cat]=(cnt[p.cat]||0)+1;
+  $('legend').innerHTML=CATS.map(c=>`<label class="leg" style="cursor:pointer;margin:4px 0;color:var(--tx);font-size:13px"><input type="checkbox" data-k="${c.k}" ${S.cats[c.k]?'checked':''} style="width:auto"><i style="border-color:${c.c};background:${c.c}33"></i>${c.n}<span class="n">${cnt[c.k]||0}</span></label>`).join('');
+  const tc=[0,0,0,0,0];for(const p of S.prefabs.values())for(const c of p.chests)tc[c.q]++;
+  $('legend').innerHTML+='<div class="mu" style="margin:8px 0 2px">Chest tiers (outline colour)</div>'+TIERC.map((c,i)=>`<label class="leg" style="cursor:pointer;margin:4px 0;color:var(--tx);font-size:13px"><input type="checkbox" data-t="${i}" ${S.tiers[i]?'checked':''} style="width:auto"><i style="border-color:${c};background:transparent"></i>Tier ${i+1}<span class="n">${tc[i]}</span></label>`).join('');
+  $('legend').querySelectorAll('input[data-k]').forEach(i=>i.onchange=()=>{S.cats[i.dataset.k]=i.checked;dirty=true});
+  $('legend').querySelectorAll('input[data-t]').forEach(i=>i.onchange=()=>{S.tiers[+i.dataset.t]=i.checked;dirty=true;updFind()})}
+const wkey=()=>'bsf-wp-'+S.seed;
+function loadWps(){try{S.wps=JSON.parse(localStorage.getItem(wkey())||'[]')}catch{S.wps=[]}renderWps()}
+function addWp(w){S.wps.push(w);try{localStorage.setItem(wkey(),JSON.stringify(S.wps))}catch{}renderWps();dirty=true}
+function renderWps(){const el=$('wps');if(!S.wps.length){el.className='mu';el.textContent='No waypoints yet. Right-click the map to add.';return}
+  el.className='';el.innerHTML='';S.wps.forEach((w,i)=>{const d=document.createElement('div');d.className='wp';d.innerHTML=`<span></span><button class="fix">GO</button><button class="fix">✕</button>`;
+    d.querySelector('span').textContent=`${w.name} (${w.x}, ${w.z})`;const[b1,b2]=d.querySelectorAll('button');
+    b1.onclick=()=>{S.cx=w.x;S.cz=w.z;syncInputs();dirty=true;pump();hashSoon()};b2.onclick=()=>{S.wps.splice(i,1);try{localStorage.setItem(wkey(),JSON.stringify(S.wps))}catch{}renderWps();dirty=true};el.appendChild(d)})}
+
+// ---------------- chest loot ----------------
+function groupItems(items){const m=new Map();for(let [n,a,at] of items){n=n.replace(/_/g,' ').replace(/ Default$/,'');const k=n+'|'+at;const e=m.get(k)||{n,at,a:0};e.a+=(a==null?1:a);m.set(k,e)}return [...m.values()].sort((x,y)=>x.n.localeCompare(y.n))}
+function renderLoot(){const el=$('loot'),p=S.sel;
+  if(!p){el.className='mu';el.textContent='Click a structure marker on the map to see its chests and loot.';return}
+  el.className='';el.innerHTML='';const h=document.createElement('div');h.innerHTML=`<b>${pretty(p.name)}</b> <span class="mu">centre ${p.x}, ${p.z}</span>`;el.appendChild(h);
+  if(!p.chests.length){const d=document.createElement('div');d.className='mu';d.textContent='No chests in this structure.';el.appendChild(d);return}
+  for(const c of p.chests){const d=document.createElement('div');d.className='chest';
+    d.innerHTML=`<div class="row"><span class="tier" style="border-color:${TIERC[c.q]}">T${c.q+1}</span><span class="mu" style="flex:3">chest at ${c.x}, ${c.y}, ${c.z}</span><button class="fix">GO</button></div>`;
+    d.querySelector('button').onclick=()=>{S.cx=c.x;S.cz=c.z;S.scale=Math.max(S.scale,6);syncInputs();dirty=true;pump();hashSoon()};
+    const ul=document.createElement('ul');ul.className='items';const g=groupItems(c.items);
+    if(!g.length)ul.innerHTML='<li class="mu">(empty)</li>';
+    for(const it of g){const li=document.createElement('li');li.textContent=`${it.n} ×${it.a}`;if(it.at){const s=document.createElement('span');s.className='at';s.textContent=' ('+it.at+')';li.appendChild(s)}ul.appendChild(li)}
+    d.appendChild(ul);el.appendChild(d)}}
+function updFind(){const q=$('findq').value.trim().toLowerCase(),out=$('findres');S.find.keys=new Set();dirty=true;
+  if(!q){out.className='mu';out.textContent='Type an item name. Searches structures discovered so far.';return}
+  const rows=[];for(const p of S.prefabs.values())for(const c of p.chests){if(!S.tiers[c.q])continue;const hits=c.items.filter(i=>i[0].toLowerCase().includes(q));
+    if(hits.length){S.find.keys.add(c.x+'|'+c.y+'|'+c.z);rows.push({p,c,hits,d:Math.hypot(c.x-S.cx,c.z-S.cz)})}}
+  rows.sort((a,b)=>a.d-b.d);out.className='';out.innerHTML=`<div class="mu" style="margin-bottom:4px">${rows.length} chest${rows.length===1?'':'s'} match · pink dashed box on the map</div>`;
+  for(const r of rows.slice(0,25)){const d=document.createElement('div');d.className='fr';const g=groupItems(r.hits).map(i=>`${i.n} ×${i.a}`).join(', ');
+    d.innerHTML=`<span class="tier" style="border-color:${TIERC[r.c.q]};flex:none">T${r.c.q+1}</span><span></span><button class="fix">GO</button>`;
+    d.children[1].textContent=`${g} — ${Math.round(r.d)} blocks`;d.querySelector('button').onclick=()=>{S.cx=r.c.x;S.cz=r.c.z;S.scale=Math.max(S.scale,6);S.sel=r.p;renderLoot();syncInputs();dirty=true;pump();hashSoon()};out.appendChild(d)}
+  if(rows.length>25){const m=document.createElement('div');m.className='mu';m.textContent=`…and ${rows.length-25} more`;out.appendChild(m)}}
+$('findq').addEventListener('input',updFind);
+setInterval(()=>{if(findSoon){findSoon=false;updLegend();if($('findq').value.trim())updFind();if(S.sel&&!S.sel.chests.length===false){}}},700);
+
+// ---------------- seed loading ----------------
+function loadSeed(seed,x,z,scale){
+  S.seed=String(seed);S.tok++;S.tiles.clear();S.lite.clear();S.pend.clear();S.prefabs.clear();S.sel=null;renderLoot();mapPool.forEach(w=>w.busy=null);
+  if(x!==undefined){S.cx=x;S.cz=z}if(scale)S.scale=scale;$('seed').value=S.seed;syncInputs();loadWps();updLegend();dirty=true;pump();hashSoon()}
+$('load').onclick=()=>loadSeed($('seed').value.trim()||'1',0,0);
+$('seed').addEventListener('keydown',e=>{if(e.key==='Enter')$('load').click()});
+
+// ---------------- game file / workers ----------------
+const setSt=(t,err)=>{$('st').textContent=t;if(err){$('msg').style.display='block';$('msg').textContent=t+' (keep game_worker.js next to index.html)'}};
+function extract(text){
+  if(text.slice(0,300).includes('procGen.worker')&&/case"createSeed":/.test(text))return text;
+  const pg=text.indexOf('procGen.worker');if(pg<0)throw new Error('No procGen worker found in this file.');
+  const mk=text.lastIndexOf('For license information please see',pg);if(mk<0)throw new Error('Unexpected file layout.');
+  const start=Math.max(text.lastIndexOf("'",mk),text.lastIndexOf('"',mk));const q=text[start];let i=start+1;
+  while(i<text.length&&text[i]!==q)i+=text[i]==='\\'?2:1;return new Function('return '+text.slice(start,i+1))()}
+function build(code){
+  const m=/case"createSeed":(?:var \w+;)?(\w+)\[\w+\.seed\]=new /.exec(code);if(!m)throw new Error('createSeed handler not found (game version changed?)');
+  const re=new RegExp('(const |let |var |,)'+m[1]+'=\\{\\}');if(!re.test(code))throw new Error('generator map not found');
+  const ll=/class (\w+)\{constructor\((\w+,){5}\w+\)\{this\.lootChestBlockId=/;if(!ll.test(code))throw new Error('loot chest class not found (game version changed?)');
+  return code.replace(re,(a,p)=>p+m[1]+'=globalThis.__GH={}').replace(ll,(a,n)=>a.replace('{constructor','{static __x=(globalThis.__LootChest='+n+');constructor'))+'\n'+$('glue').textContent}
+function spawnWorker(){return new Promise((res,rej)=>{const w=new Worker(URL.createObjectURL(new Blob([workerSrc],{type:'text/javascript'})));
+  w.onerror=e=>rej(new Error(e.message||'worker error'));w.addEventListener('message',function f(e){if(e.data.t==='ready'){w.removeEventListener('message',f);res(w)}})})}
+async function useCode(text,save){
+  try{setSt('Preparing…');await texReady;const code=extract(text);workerSrc=build(code);
+    mapPool.forEach(w=>w.terminate());const n=Math.max(2,Math.min(8,(navigator.hardwareConcurrency||4)-1));
+    mapPool=await Promise.all(Array.from({length:n},spawnWorker));mapPool.forEach(w=>{w.busy=null;w.onmessage=e=>onMapMsg(w,e.data)});
+    setSt(`Ready (${(code.length/1024).toFixed(0)} KB worldgen code, ${n} threads).`);$('msg').style.display='none';
+    ['load','tpw','tpc','go','copylink','savepng'].forEach(i=>$(i).disabled=false);
+    if(save)idbSet(code).catch(()=>{});
+    const h=new URLSearchParams(location.hash.slice(1));
+    if(h.get('seed'))loadSeed(h.get('seed'),+h.get('x')||0,+h.get('z')||0,+h.get('s')||2);else loadSeed($('seed').value||'1',0,0);
+  }catch(e){workerSrc=null;setSt('Error: '+e.message,true)}}
+$('file').onchange=async e=>{const f=e.target.files[0];if(f)useCode(await f.text(),true)};
+const idb=()=>new Promise((res,rej)=>{const r=indexedDB.open('bloxd-sf',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)});
+async function idbSet(v){const d=await idb();d.transaction('k','readwrite').objectStore('k').put(v,'worker')}
+async function idbGet(){const d=await idb();return new Promise(res=>{const r=d.transaction('k').objectStore('k').get('worker');r.onsuccess=()=>res(r.result);r.onerror=()=>res(null)})}
+if(window.BLOXD_WORKER)useCode(window.BLOXD_WORKER,false);else idbGet().then(v=>{if(v)useCode(v,false)}).catch(()=>{});
+
+// ---------------- seed search ----------------
+for(const id of['atSpawn','need','avoid'])$(id).innerHTML=NAMES.map(n=>`<option>${n}</option>`).join('');
+$('threads').value=Math.max(1,Math.min(8,(navigator.hardwareConcurrency||4)-1));
+$('mode').onchange=()=>{const m=$('mode').value;$('m_range').style.display=m==='range'?'flex':'none';$('words').style.display=m==='words'?'block':'none';$('rand').style.display=m==='random'?'block':'none'};
+const idsOf=sel=>[...sel.selectedOptions].flatMap(o=>LABELS.map((l,i)=>l===o.value?i:-1).filter(i=>i>=0));
+function criteria(){const n=id=>$(id).value===''?null:+$(id).value;
+  return{spawn:[0,0],radius:+$('radius').value,step:+$('step').value,atSpawn:$('atSpawn').selectedOptions.length?idsOf($('atSpawn')):null,
+    need:[...$('need').selectedOptions].map(o=>LABELS.map((l,i)=>l===o.value?i:-1).filter(i=>i>=0)),avoid:$('avoid').selectedOptions.length?idsOf($('avoid')):null,
+    minVariety:+$('variety').value||0,land:$('land').checked,dry:+$('dry').value||0,hmin:n('hmin'),hmax:n('hmax')}}
+function seedList(){const m=$('mode').value;
+  if(m==='words')return $('words').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(m==='random')return Array.from({length:+$('rand').value},()=>String(100000+Math.floor(Math.random()*900000)));
+  const a=+$('from').value,b=+$('to').value,out=[];for(let s=a;s<=b&&out.length<5e6;s++)out.push(String(s));return out}
+function stopSearch(){searchPool.forEach(w=>w.terminate());searchPool=[];$('go').disabled=!workerSrc;$('stop').disabled=true}
+$('stop').onclick=stopSearch;
+$('go').onclick=async()=>{
+  const c=criteria(),seeds=seedList(),limit=+$('limit').value||10,nT=Math.max(1,Math.min(16,+$('threads').value||1));if(!seeds.length)return;
+  const B=(c.land||c.dry||c.hmin!=null||c.hmax!=null)?4:25;$('results').innerHTML='';let hits=0,done=0,next=0,active=0;const t0=performance.now();
+  $('go').disabled=true;$('stop').disabled=false;$('prog').textContent='Starting workers…';
+  try{searchPool=await Promise.all(Array.from({length:nT},spawnWorker))}catch(e){setSt('Error: '+e.message,true);return stopSearch()}
+  const feed=w=>{if(hits>=limit||next>=seeds.length){if(--active===0){stopSearch();if(!hits)$('prog').textContent+=' — no matches; loosen the criteria or widen the range.'}return}
+    w.postMessage({t:'search',seeds:seeds.slice(next,next+B),c,L:LABELS});next+=B};
+  searchPool.forEach(w=>{active++;w.onmessage=e=>{const m=e.data;if(m.t!=='hits')return;done+=m.n;for(const h of m.hits)if(hits<limit){hits++;addResult(h)}
+    $('prog').textContent=`${Math.min(done,seeds.length)}/${seeds.length} · ${hits} found · ${(done/((performance.now()-t0)/1000)).toFixed(0)}/s`;
+    $('barfill').style.width=(100*Math.min(done,seeds.length)/seeds.length)+'%';feed(w)};feed(w)})};
+function addResult(h){const d=document.createElement('div');d.className='res';
+  d.innerHTML=`<div><b></b> <span class="mu">${h.spawn}${h.y!==undefined?' y='+h.y:''} · ${h.variety} biomes</span><div class="tags">${h.biomes.map(b=>`<span>${b}</span>`).join('')}</div></div><button class="fix">VIEW</button>`;
+  d.querySelector('b').textContent=h.seed;d.querySelector('button').onclick=()=>loadSeed(h.seed,0,0);$('results').appendChild(d)}
+updLegend();loadWps();resize();
+</script></body></html>
