@@ -54,12 +54,3 @@ This project uses files supplied with the project archive. The world-generation 
 ---
 **Project:** Bloxd Seed Map
 """
-with zipfile.ZipFile(src,"r") as zin, zipfile.ZipFile(out,"w",zipfile.ZIP_DEFLATED) as zout:
-    for item in zin.infolist():
-        if item.filename == "bloxd-seed-map/README.txt":
-            # Replace existing readme with a concise pointer to the full Markdown guide.
-            zout.writestr(item, "See README.md for the full Bloxd Seed Map documentation.\n")
-        else:
-            zout.writestr(item, zin.read(item.filename))
-    zout.writestr("bloxd-seed-map/README.md", readme)
-os.path.getsize(out)
